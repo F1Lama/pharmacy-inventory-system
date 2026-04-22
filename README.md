@@ -52,23 +52,6 @@ A full-stack web application built to help hospitals and pharmacies manage medic
 - Session Protection
 - Role Authorization
 
-## Project Structure
-
-```bash
-pharmacy-inventory-system/
-│── index.php
-│── dashboard.php
-│── owner.php
-│── logout.php
-│── db.php
-│── validation.js
-│── CSS/
-│   ├── base.css
-│   ├── dash.css
-│   ├── owner.css
-│── bootstrap/
-```
-
 ## How to Run
 
 1. Install XAMPP
@@ -101,4 +84,4 @@ http://localhost/pharmacy-inventory-system
 
 ## Author
 
-Developed by Lama
+Developed by Lama Aldhafyan
