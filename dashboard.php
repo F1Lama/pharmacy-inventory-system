@@ -11,33 +11,10 @@ $username    = $_SESSION['username'];
 $role        = $_SESSION['role'];
 $hospital_id = $_SESSION['hospital_id'];
 
-$today = date('Y-m-d');
-
-/*  ADD MEDICINE */
-if (isset($_POST['add_medicine'])) {
-
-    $name   = trim($_POST['name']);
-    $qty    = trim($_POST['qty']);
-    $expiry = $_POST['expiry_date'];
-
-    if (!empty($name) && !empty($qty) && !empty($expiry)) {
-
-        $stmt = $conn->prepare("
-            INSERT INTO medicines (name, quantity, expiry_date, hospital_id)
-            VALUES (?, ?, ?, ?)
-        ");
-
-        $stmt->bind_param("sisi", $name, $qty, $expiry, $hospital_id);
-        $stmt->execute();
-
-        $_SESSION['success'] = "Medicine added successfully";
-    }
-
-    header("Location: dashboard.php");
-    exit();
-}
 $error_user = "";
-/* ADD USER */
+
+
+/* ADD USER  */
 if (isset($_POST['add_user'])) {
 
     if ($role == "admin") {
@@ -46,49 +23,44 @@ if (isset($_POST['add_user'])) {
         $password     = trim($_POST['password']);
         $new_role     = $_POST['role'];
 
-        /*  VALIDATION  */
-
+        /* USERNAME */
         if (empty($new_username) || empty($password)) {
-            $error_user = "Username and password are required";
+            $error_user = "Username and password are required.";
         }
 
         elseif (strlen($new_username) < 5) {
-            $error_user = "Username must be at least 5 characters";
+            $error_user = "Username must be at least 5 characters.";
         }
 
         elseif (!preg_match("/^[a-zA-Z0-9_]+$/", $new_username)) {
-            $error_user = "Username can only contain letters, numbers, and _";
+            $error_user = "Username can contain only letters, numbers and _.";
         }
 
-        elseif (strlen($password) < 8) {
-            $error_user = "Password must be at least 8 characters";
-        }
-
-        elseif (!preg_match("/[A-Z]/", $password)) {
-            $error_user = "Password must contain uppercase letter";
-        }
-
-        elseif (!preg_match("/[a-z]/", $password)) {
-            $error_user = "Password must contain lowercase letter";
-        }
-
-        elseif (!preg_match("/[0-9]/", $password)) {
-            $error_user = "Password must contain number";
-        }
-
-        elseif (!preg_match("/[\W]/", $password)) {
-            $error_user = "Password must contain special character";
+        /* PASSWORD */
+        elseif (
+            strlen($password) < 8 ||
+            !preg_match("/[A-Z]/", $password) ||
+            !preg_match("/[a-z]/", $password) ||
+            !preg_match("/[0-9]/", $password) ||
+            !preg_match("/[\W]/", $password)
+        ) {
+            $error_user = "Password must be 8+ chars and include uppercase, lowercase, number, and special character.";
         }
 
         else {
 
-            $check = $conn->prepare("SELECT id FROM users WHERE username = ?");
-            $check->bind_param("s", $new_username);
+            /* CHECK DUPLICATE */
+            $check = $conn->prepare("
+                SELECT id FROM users
+                WHERE username = ? AND hospital_id = ?
+            ");
+
+            $check->bind_param("si", $new_username, $hospital_id);
             $check->execute();
             $check_result = $check->get_result();
 
             if ($check_result->num_rows > 0) {
-                $error_user = "Username already exists";
+                $error_user = "Username already exists.";
             } else {
 
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
@@ -101,377 +73,255 @@ if (isset($_POST['add_user'])) {
                 $stmt->bind_param("sssi", $new_username, $hashed, $new_role, $hospital_id);
                 $stmt->execute();
 
-                $_SESSION['success'] = "User created successfully";
+                $_SESSION['success'] = "User created successfully.";
+                header("Location: dashboard.php");
+                exit();
             }
         }
     }
 }
 
-/*  UPDATE MEDICINE*/
-if (isset($_POST['update_medicine'])) {
+/* COUNTS */
+$totalMedicines = $conn->query("SELECT id FROM medicines WHERE hospital_id=$hospital_id")->num_rows;
+$totalUsers     = $conn->query("SELECT id FROM users WHERE hospital_id=$hospital_id")->num_rows;
+$totalAdmins    = $conn->query("SELECT id FROM users WHERE hospital_id=$hospital_id AND role='admin'")->num_rows;
 
-    $id   = $_POST['edit_id'];
-    $name = $_POST['name'];
-    $qty  = $_POST['qty'];
-    $date = $_POST['expiry_date'];
+/* MEDICINES STATS */
 
-    $stmt = $conn->prepare("
-        UPDATE medicines
-        SET name=?, quantity=?, expiry_date=?
-        WHERE id=? AND hospital_id=?
-    ");
+$totalMedicines = $conn->query("
+    SELECT id FROM medicines 
+    WHERE hospital_id=$hospital_id
+")->num_rows;
 
-    $stmt->bind_param("sisii", $name, $qty, $date, $id, $hospital_id);
-    $stmt->execute();
+$expiredMedicines = $conn->query("
+    SELECT id FROM medicines 
+    WHERE hospital_id=$hospital_id 
+    AND expiry_date < CURDATE()
+")->num_rows;
 
-    $_SESSION['success'] = "Medicine updated";
+$nearExpiryMedicines = $conn->query("
+    SELECT id FROM medicines 
+    WHERE hospital_id=$hospital_id 
+    AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+")->num_rows;
 
-    header("Location: dashboard.php");
-    exit();
-}
+$availableMedicines = $conn->query("
+    SELECT id FROM medicines 
+    WHERE hospital_id=$hospital_id 
+    AND expiry_date > DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+")->num_rows;
 
-/*  DELETE MEDICINE */
-if (isset($_POST['delete_id'])) {
 
-    $id = $_POST['delete_id'];
+/* USERS STATS */
 
-    $stmt = $conn->prepare("
-        DELETE FROM medicines
-        WHERE id=? AND hospital_id=?
-    ");
+$totalUsers = $conn->query("
+    SELECT id FROM users 
+    WHERE hospital_id=$hospital_id
+")->num_rows;
 
-    $stmt->bind_param("ii", $id, $hospital_id);
-    $stmt->execute();
+$totalAdmins = $conn->query("
+    SELECT id FROM users 
+    WHERE hospital_id=$hospital_id 
+    AND role='admin'
+")->num_rows;
 
-    $_SESSION['success'] = "Medicine deleted";
-
-    header("Location: dashboard.php");
-    exit();
-}
-
-/* SEARCH*/
-$search = $_GET['search'] ?? '';
-
-if (!empty($search)) {
-
-    $stmt = $conn->prepare("
-        SELECT * FROM medicines
-        WHERE hospital_id = ?
-        AND name LIKE ?
-        ORDER BY expiry_date ASC
-    ");
-
-    $like = "%$search%";
-    $stmt->bind_param("is", $hospital_id, $like);
-
-} else {
-
-    $stmt = $conn->prepare("
-        SELECT * FROM medicines
-        WHERE hospital_id = ?
-        ORDER BY expiry_date ASC
-    ");
-
-    $stmt->bind_param("i", $hospital_id);
-}
-
-$stmt->execute();
-$result = $stmt->get_result();
+$totalPharmacists = $conn->query("
+    SELECT id FROM users 
+    WHERE hospital_id=$hospital_id 
+    AND role='pharmacist'
+")->num_rows;
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Dashboard</title>
 
 <link rel="stylesheet" href="bootstrap-5.3.8-dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-<link rel="stylesheet" href="CSS/base.css">
 <link rel="stylesheet" href="CSS/dash.css">
+
 
 </head>
 
 <body>
 
-<!-- NAVBAR -->
-<nav class="navbar bg-white shadow-sm">
-  <div class="container">
-    <span class="navbar-brand fw-bold">Pharmacy Inventory System</span>
+<!-- SIDEBAR -->
+<div class="sidebar">
 
-    <div class="d-flex gap-3 align-items-center">
-        <span>Welcome, <?= htmlspecialchars($username) ?></span>
-         <a href="logout.php" class="btn btn-outline-danger btn-sm">
-            Logout
-        </a>
-    </div>
-  </div>
-</nav>
-
-<!-- ALERTS -->
-<div class="container mt-3">
-<?php if(isset($_SESSION['error'])): ?>
-    <div class="alert alert-danger">
-        <?php 
-        echo $_SESSION['error']; 
-        unset($_SESSION['error']); 
-        ?>
-    </div>
-<?php endif; ?>
-
-<?php if(isset($_SESSION['success'])): ?>
-    <div class="alert alert-success">
-        <?php 
-        echo $_SESSION['success']; 
-        unset($_SESSION['success']); 
-        ?>
-    </div>
-<?php endif; ?>
-
-</div>
-
-<div class="container  content">
-
-<!-- ACTIONS -->
-<div class="d-flex gap-2 mb-3">
-
-<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMedicine">
-+ Add Medicine
-</button>
+<h4 class="mb-4">Pharmacy Dashboard</h4>
 
 <?php if($role == 'admin'): ?>
-<button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#addUser">
-+ Add User
+<button class="btn btn-dark"
+data-bs-toggle="modal"
+data-bs-target="#addUser">
+<i class="bi bi-plus-circle"></i>
+Add User
 </button>
 <?php endif; ?>
 
+<a href="medicines.php" class="btn btn-success">View Medicines</a>
+
+<?php if($role == 'admin'): ?>
+<a href="users.php" class="btn btn-primary">View Users</a>
+<?php endif; ?>
+
+<a href="logout.php" class="btn btn-outline-danger">Logout</a>
 </div>
 
-<!-- SEARCH -->
-<form method="GET" class="mb-3">
-<input type="text"
-name="search"
-class="form-control"
-placeholder="Search medicine..."
-value="<?= htmlspecialchars($search) ?>">
-</form>
+<!-- MAIN -->
+<div class="main">
 
-<!-- TABLE -->
-<div class="table-wrapper mb-3">
-<div class="table-responsive">
-
-<table class="table align-middle">
-<thead>
-<tr>
-<th>Name</th>
-<th>Qty</th>
-<th>Expiry</th>
-<th>Status</th>
-<th>Action</th>
-</tr>
-</thead>
-
-<tbody>
-
-<?php while($row = $result->fetch_assoc()): ?>
-
-<?php
-$diff = (strtotime($row['expiry_date']) - strtotime($today)) / 86400;
-
-if ($diff < 0) {
-    $status = "Expired"; 
-    $color = "danger";
-} elseif ($diff <= 7) {
-    $status = "Near Expiry";
-     $color = "warning";
-} else {
-    $status = "Valid"; 
-    $color = "success";
-}
-?>
-
-<tr>
-<td><?= htmlspecialchars($row['name']) ?></td>
-<td><?= $row['quantity'] ?></td>
-<td><?= $row['expiry_date'] ?></td>
-
-<td>
-<span class="badge bg-<?= $color ?>">
-<?= $status ?>
-</span>
-</td>
-
-<td>
-<div class="action-icons">
-
-<button class="icon-btn icon-edit"
-data-bs-toggle="modal"
-data-bs-target="#edit<?= $row['id'] ?>">
-<i class="bi bi-pencil-square"></i>
-</button>
-
-<button class="icon-btn icon-delete"
-data-bs-toggle="modal"
-data-bs-target="#delete<?= $row['id'] ?>">
-<i class="bi bi-x-lg"></i>
-</button>
-
-</div>
-</td>
-</tr>
-
-<!-- EDIT MODAL -->
-<div class="modal fade" id="edit<?= $row['id'] ?>">
-<div class="modal-dialog">
-<div class="modal-content">
-
-<div class="modal-header">
-<h5>Edit Medicine</h5>
-<button class="btn-close" data-bs-dismiss="modal"></button>
+<!-- TOP -->
+<div class="topbar d-flex justify-content-between align-items-center">
+<h4>Pharmacy Inventory System</h4>
+<span>Welcome, <?= htmlspecialchars($username) ?></span>
 </div>
 
-<div class="modal-body">
-
-<form method="POST">
-
-<input type="hidden" name="edit_id" value="<?= $row['id'] ?>">
-
-<input type="text" name="name" class="form-control mb-2"
-value="<?= $row['name'] ?>">
-
-<input type="number" name="qty" class="form-control mb-2"
-value="<?= $row['quantity'] ?>">
-
-<input type="date" name="expiry_date" class="form-control mb-2"
-value="<?= $row['expiry_date'] ?>">
-
-<button name="update_medicine" class="btn btn-primary w-100">
-Update
-</button>
-
-</form>
-
+<!-- SUCCESS -->
+<?php if(isset($_SESSION['success'])): ?>
+<div class="alert alert-success">
+<?= $_SESSION['success']; unset($_SESSION['success']); ?>
 </div>
+<?php endif; ?>
+
+<!-- CARDS -->
+<div class="row g-4">
+
+<!-- MEDICINES CARD -->
+<div class="col-lg-6">
+<a href="medicines.php" style="text-decoration:none;color:inherit;">
+<div class="card card-box p-4 h-100">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+<div>
+<h5 class="mb-1">Medicines Overview</h5>
+<small class="text-muted">Pharmacy Inventory Status</small>
 </div>
+
+<div class="fs-1 text-success">
+<i class="bi bi-capsule-pill"></i>
 </div>
 </div>
 
-<!-- DELETE MODAL -->
-<div class="modal fade" id="delete<?= $row['id'] ?>">
-<div class="modal-dialog">
-<div class="modal-content">
+<div class="row text-center g-3">
 
-<div class="modal-header">
-<h5 class="text-danger">Confirm Delete</h5>
-<button class="btn-close" data-bs-dismiss="modal"></button>
-</div>
-
-<div class="modal-body">
-Delete <b><?= $row['name'] ?></b> ?
-</div>
-
-<div class="modal-footer">
-
-<button class="btn btn-secondary" data-bs-dismiss="modal">
-Cancel
-</button>
-
-<form method="POST" style="display:inline;">
-    <input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
-
-    <button type="submit" class="btn btn-danger">
-        Delete
-    </button>
-</form>
-
-</div>
-
-</div>
+<div class="col-6">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Total</h6>
+<h3 class="text-primary mb-0"><?= $totalMedicines ?></h3>
 </div>
 </div>
 
-<?php endwhile; ?>
+<div class="col-6">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Available</h6>
+<h3 class="text-success mb-0"><?= $availableMedicines ?></h3>
+</div>
+</div>
 
-</tbody>
-</table>
+<div class="col-6">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Near Expiry</h6>
+<h3 class="text-warning mb-0"><?= $nearExpiryMedicines ?></h3>
+</div>
+</div>
 
+<div class="col-6">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Expired</h6>
+<h3 class="text-danger mb-0"><?= $expiredMedicines ?></h3>
 </div>
 </div>
 
 </div>
 
-<!-- ADD MEDICINE MODAL -->
-<div class="modal fade" id="addMedicine">
-<div class="modal-dialog">
-<div class="modal-content">
-    <div class="modal-header">
-<h5 class="modal-title">Add Medicine</h5>
-<button class="btn-close" data-bs-dismiss="modal"></button>
 </div>
-<div class="modal-body">
-
-<form method="POST" onsubmit="return validateMedicineForm()">
-
-<input type="text" id="medicineName" name="name" class="form-control mb-2" placeholder="Name" required>
-<small id="nameError" class="text-danger"></small>
-
-<input type="number" id="medicineQty" name="qty" class="form-control mb-2" placeholder="Qty" required>
-<small id="qtyError" class="text-danger"></small>
-
-<input type="date" id="medicineDate" name="expiry_date" class="form-control mb-2" required>
-<small id="dateError" class="text-danger"></small>
-
-<button name="add_medicine" class="btn btn-primary w-100">
-Add
-</button>
-
-</form>
-
+</a>
 </div>
+
+<!-- USERS CARD -->
+<div class="col-lg-6">
+<a href="users.php" style="text-decoration:none;color:inherit;">
+<div class="card card-box p-4 h-100">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+<div>
+<h5 class="mb-1">Users Overview</h5>
+<small class="text-muted">Pharmacy Staff Accounts</small>
 </div>
+
+<div class="fs-1 text-primary">
+<i class="bi bi-people-fill"></i>
 </div>
 </div>
 
+<div class="row text-center g-3">
 
-<!-- USER MODAL -->
+<div class="col-4">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Users</h6>
+<h3 class="text-success mb-0"><?= $totalUsers ?></h3>
+</div>
+</div>
+
+<div class="col-4">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Admins</h6>
+<h3 class="text-dark mb-0"><?= $totalAdmins ?></h3>
+</div>
+</div>
+
+<div class="col-4">
+<div class="border rounded-4 p-3">
+<h6 class="text-muted mb-1">Pharmacists</h6>
+<h3 class="text-primary mb-0"><?= $totalPharmacists ?></h3>
+</div>
+</div>
+
+</div>
+
+</div>
+</a>
+</div>
+
+</div>
+
+<!-- ADD USER MODAL -->
 <div class="modal fade" id="addUser">
 <div class="modal-dialog">
 <div class="modal-content">
 
 <div class="modal-header">
-<h5 class="modal-title">Add User</h5>
+<h5>Add User</h5>
 <button class="btn-close" data-bs-dismiss="modal"></button>
 </div>
 
 <div class="modal-body">
+
+<!-- ERROR -->
 <?php if(!empty($error_user)): ?>
 <div class="alert alert-danger">
-    <?= $error_user ?>
+<?= $error_user ?>
 </div>
 <?php endif; ?>
 
 <form method="POST">
 
-<input type="text"
-name="username"
-class="form-control mb-2"
-placeholder="Username"
-required>
-
-<input type="password"
-name="password"
-class="form-control mb-2"
-placeholder="Password"
-required>
-
+<input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
+<input type="password" name="password" class="form-control mb-2" placeholder="Password" required>
+<small class="text-muted d-block mb-3">
+Password must contain: 8+ chars, uppercase, lowercase, number, special character
+</small>
 <div class="form-check">
-<input class="form-check-input" type="radio" name="role" value="admin" id="admin">
-<label class="form-check-label" for="admin">Admin</label>
+<input type="radio" name="role" value="admin">
+<label>Admin</label>
 </div>
 
-<div class="form-check mb-2">
-<input class="form-check-input" type="radio" name="role" value="pharmacist" id="pharmacist" checked>
-<label class="form-check-label" for="pharmacist">Pharmacist</label>
+<div class="form-check mb-3">
+<input type="radio" name="role" value="pharmacist" checked>
+<label>Pharmacist</label>
 </div>
 
 <button name="add_user" class="btn btn-dark w-100">
@@ -481,17 +331,21 @@ Add User
 </form>
 
 </div>
+
 </div>
 </div>
 </div>
 
-<script src="bootstrap-5.3.8-dist/js/bootstrap.bundle.min.js"></script>
-<script src="validation.js"></script>
+<!-- AUTO REOPEN MODAL IF ERROR -->
 <?php if(!empty($error_user)): ?>
 <script>
-var myModal = new bootstrap.Modal(document.getElementById('addUser'));
-myModal.show();
+document.addEventListener("DOMContentLoaded", function () {
+    var modal = new bootstrap.Modal(document.getElementById('addUser'));
+    modal.show();
+});
 </script>
 <?php endif; ?>
+
+<script src="bootstrap-5.3.8-dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html> 
+</html>

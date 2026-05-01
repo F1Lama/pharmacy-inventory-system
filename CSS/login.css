@@ -7,11 +7,38 @@ body {
 }
 
 .login-card {
+    position: relative;
     width: 100%;
     max-width: 420px;
     padding: 32px;
-    border-radius: 16px;
+    border-radius: 18px;
     background: #fff;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
     text-align: center;
+    box-shadow:
+        0 10px 30px rgba(0,0,0,0.06),
+        0 0 0 rgba(99,102,241,0);
+
+    animation: fadeInUp 0.6s ease;
+    transition: all 0.35s ease;
+}
+
+/*  Hover */
+.login-card:hover {
+    transform: translateY(-5px);
+
+    box-shadow:
+        0 20px 50px rgba(0,0,0,0.08),
+        0 0 25px rgba(99,102,241,0.25);
+}
+
+/*  Animation  */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(25px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
